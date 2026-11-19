@@ -3,63 +3,92 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neon Coast — GTA-style cover maker</title>
-<meta name="description" content="Turn your photos and a caption into GTA-style multi-panel cover art, offline in your browser, and export it as a PNG.">
-<!-- Neon Coast: the whole app is static files — no upload, no network. -->
+<title>Vice Lights — GTA-style Cover Maker</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="app">
-  <section class="controls" aria-label="Cover editor">
-    <header>
-      <h1>Neon Coast</h1>
-      <p class="tagline">Your photos, a caption, a Vice City cover — made offline, on your machine.</p>
-    </header>
-    <nav class="steps" aria-label="Steps">
-      <button type="button" data-step="1" class="active">1 · Photos</button>
-      <button type="button" data-step="2">2 · Caption</button>
-      <button type="button" data-step="3">3 · Export</button>
-    </nav>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">VL</span>
+    <span class="brand-name">VICE LIGHTS</span>
+    <span class="brand-sub">cover maker</span>
+  </div>
+  <p class="tagline">Your photo. Your caption. A Vice City sunset poster — made offline, in your browser.</p>
+</header>
 
-    <div class="step active" id="step-1">
-      <h2>Layout</h2>
-      <div class="picker" id="layouts"></div>
-      <h2>Photos — click a panel, then drag it to crop</h2>
-      <div id="panels"></div>
-      <label class="zoom-row">Zoom selected panel
-        <input id="zoom" type="range" min="1" max="3" step="0.05" value="1">
-        <span id="zoom-value">100%</span>
-      </label>
-      <p class="hint">Tip: drag the photo inside the preview to reposition it. The two samples are free to use; upload your own photos instead.</p>
+<main id="editor" class="editor">
+  <section class="stage-col">
+    <div class="stage-wrap">
+      <canvas id="preview" width="720" height="720"></canvas>
+      <p id="stageHint" class="stage-hint">Click a panel to select it, then crop the photo inside it.</p>
     </div>
-
-    <div class="step" id="step-2">
-      <h2>Caption</h2>
-      <label>Top line
-        <input id="top" type="text" maxlength="30" value="VICE CITY">
-      </label>
-      <label>Big title
-        <input id="bottom" type="text" maxlength="24" value="Sunset Heist">
-      </label>
-      <h2>Grade</h2>
-      <div class="picker" id="themes"></div>
-      <p class="hint">The grade washes every panel in a sunset or neon glow and tints the title to match.</p>
-    </div>
-
-    <div class="step" id="step-3">
-      <h2>Export size</h2>
-      <div class="picker" id="sizes"></div>
-      <button id="export" type="button" class="primary">Export PNG</button>
-      <button id="export-all" type="button">Export all three sizes</button>
-      <p id="status" role="status"></p>
-      <p class="hint">Exports are drawn at full size, never an upscale of the preview. No photo ever leaves your machine.</p>
+    <div class="shot-only">
+      <canvas id="shotCanvas"></canvas>
     </div>
   </section>
-  <section class="preview" aria-label="Cover preview">
-    <canvas id="cover" width="720" height="720" aria-label="The cover"></canvas>
-  </section>
+
+  <aside class="controls">
+    <section class="panel">
+      <h2>1 · Photos</h2>
+      <label class="file-btn" for="photoInput">+ Add your photos</label>
+      <input id="photoInput" type="file" accept="image/*" multiple hidden>
+      <div id="thumbs" class="thumbs"></div>
+      <p class="hint">Photos stay on your machine — they are read with FileReader and never uploaded. Try a sample:</p>
+      <div class="sample-row">
+        <button type="button" class="chip" data-sample="pier">Sample · Pier</button>
+        <button type="button" class="chip" data-sample="boulevard">Sample · Boulevard</button>
+      </div>
+      <button id="fillAll" type="button" class="wide-btn">Fill every panel with the selected photo</button>
+    </section>
+
+    <section class="panel">
+      <h2>2 · Crop the selected panel</h2>
+      <p id="selLabel" class="sel-label">No panel selected — click a panel on the cover.</p>
+      <label class="slider-row">Zoom <input id="zoom" type="range" min="1" max="2.5" step="0.01" value="1"><span id="zoomVal">1.00×</span></label>
+      <label class="slider-row">Pan X <input id="panX" type="range" min="-1" max="1" step="0.01" value="0"><span id="panXVal">0</span></label>
+      <label class="slider-row">Pan Y <input id="panY" type="range" min="-1" max="1" step="0.01" value="0"><span id="panYVal">0</span></label>
+      <button id="usePhoto" type="button" class="wide-btn">Put the selected photo in this panel</button>
+    </section>
+
+    <section class="panel">
+      <h2>3 · Layout &amp; grade</h2>
+      <div class="btn-row" id="layoutRow">
+        <button type="button" data-layout="hero" class="opt active">Hero + three</button>
+        <button type="button" data-layout="grid" class="opt">2 × 2 grid</button>
+        <button type="button" data-layout="full" class="opt">Full bleed</button>
+      </div>
+      <div class="btn-row" id="gradeRow">
+        <button type="button" data-grade="sunset" class="opt active">Sunset</button>
+        <button type="button" data-grade="neon" class="opt">Neon</button>
+        <button type="button" data-grade="gold" class="opt">Gold hour</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>4 · Caption</h2>
+      <input id="caption" type="text" value="VICE SUNSET" maxlength="24" spellcheck="false">
+      <input id="subcaption" type="text" value="NEON COAST" maxlength="30" spellcheck="false">
+      <p class="hint">Bold poster lettering, drawn on the cover. Keep it short — it fits itself.</p>
+    </section>
+
+    <section class="panel">
+      <h2>5 · Export PNG</h2>
+      <div class="btn-row" id="sizeRow">
+        <button type="button" data-size="1080x1080" class="opt active">1080 × 1080</button>
+        <button type="button" data-size="1080x1350" class="opt">1080 × 1350</button>
+        <button type="button" data-size="1920x1080" class="opt">1920 × 1080</button>
+      </div>
+      <button id="exportBtn" type="button" class="export-btn">Export cover PNG</button>
+      <p class="hint">No watermark, no upload — the PNG downloads straight from your browser.</p>
+    </section>
+  </aside>
 </main>
-<script type="module" src="./src/main.js"></script>
+
+<footer class="foot">
+  <p>VICE LIGHTS is an original design. No Rockstar Games logo, artwork or font is used. Photos are yours and never leave this device.</p>
+</footer>
+
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

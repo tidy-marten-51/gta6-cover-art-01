@@ -1,270 +1,256 @@
-// Neon Coast — the cover renderer. Everything the cover looks like lives here:
-// the multi-panel layouts, the Vice City grade, and the bold condensed caption
-// lettering. One function, drawCoverArt, paints a whole cover onto any 2D canvas
-// at any size from the same plain state object, so the live preview and the
-// exported PNG are the same drawing, and the same inputs always give the same
-// pixels — no clock, no random numbers, no network, no hidden state.
+// Vice Lights cover engine: draws a multi-panel GTA-style poster onto a canvas.
+// Pure canvas 2D, no libraries. A cover is a set of photo panels plus a bold
+// caption, graded with a Vice City sunset / neon colour pass.
 
-// A panel is one rectangle of the cover: { x, y, w, h } in fractions of the
-// cover, plus the photo that fills it and how it is cropped inside it.
-export const LAYOUTS = {
-  // Four equal panels, the classic poster grid.
-  grid: {
-    label: '2 x 2 grid',
-    panels: [
-      { x: 0, y: 0, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0, w: 0.5, h: 0.5 },
-      { x: 0, y: 0.5, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
-    ],
-  },
-  // One tall hero on the left, three stacked panels on the right.
-  hero: {
-    label: 'Hero + strip',
-    panels: [
-      { x: 0, y: 0, w: 0.62, h: 1 },
-      { x: 0.62, y: 0, w: 0.38, h: 1 / 3 },
-      { x: 0.62, y: 1 / 3, w: 0.38, h: 1 / 3 },
-      { x: 0.62, y: 2 / 3, w: 0.38, h: 1 / 3 },
-    ],
-  },
-  // Three tall panels side by side, the loading-screen strip.
-  columns: {
-    label: '3 vertical panels',
-    panels: [
-      { x: 0, y: 0, w: 1 / 3, h: 1 },
-      { x: 1 / 3, y: 0, w: 1 / 3, h: 1 },
-      { x: 2 / 3, y: 0, w: 1 / 3, h: 1 },
-    ],
-  },
-  // One photo, full bleed, the single-hero poster.
-  single: {
-    label: 'Single hero',
-    panels: [{ x: 0, y: 0, w: 1, h: 1 }],
-  },
-};
+export const LAYOUTS = ['hero', 'grid', 'full'];
+export const GRADES = ['sunset', 'neon', 'gold'];
+export const SIZES = ['1080x1080', '1080x1350', '1920x1080'];
 
-export const LAYOUT_ORDER = ['grid', 'hero', 'columns', 'single'];
-
-// The three colour grades. Each is a sky wash (top), a hot wash (bottom) and
-// the lettering gradient, so the caption always matches the grade.
-export const THEMES = {
+// A grade is two gradient washes (overlay + soft-light) plus a warm tint.
+// Colours are sampled from a Vice City dusk: magenta sky, orange horizon,
+// deep violet shadow, with a cyan neon alternative.
+export const GRADE_DEFS = {
   sunset: {
-    label: 'Sunset',
-    sky: 'rgba(255, 122, 26, 0.34)',
-    sea: 'rgba(214, 36, 120, 0.42)',
-    deep: 'rgba(43, 16, 66, 0.30)',
-    title: ['#ffe259', '#ff7b2f', '#ff2e88'],
-    band: '#2b1042',
+    washA: [[0, '#ff2e88'], [0.55, '#ff7a3d'], [1, '#7a1e6e']],
+    washB: [[0, '#2a0a4e'], [1, '#ff9a3d']],
+    tint: '#ff5a3c',
+    tintAlpha: 0.10,
   },
   neon: {
-    label: 'Neon',
-    sky: 'rgba(0, 224, 255, 0.30)',
-    sea: 'rgba(255, 46, 196, 0.40)',
-    deep: 'rgba(10, 8, 48, 0.34)',
-    title: ['#7df9ff', '#00c2ff', '#ff2ec4'],
-    band: '#0a0830',
+    washA: [[0, '#2ee6d6'], [0.5, '#b04dff'], [1, '#ff2e88']],
+    washB: [[0, '#0a2a4e'], [1, '#ff2e88']],
+    tint: '#2ee6d6',
+    tintAlpha: 0.10,
   },
   gold: {
-    label: 'Gold',
-    sky: 'rgba(255, 196, 0, 0.30)',
-    sea: 'rgba(255, 110, 0, 0.38)',
-    deep: 'rgba(46, 24, 4, 0.30)',
-    title: ['#fff6bf', '#ffc233', '#ff7b00'],
-    band: '#2e1804',
+    washA: [[0, '#ffc44d'], [0.55, '#ff7a5c'], [1, '#8a3d1e']],
+    washB: [[0, '#3d1e0a'], [1, '#ffd98a']],
+    tint: '#ffc44d',
+    tintAlpha: 0.12,
   },
 };
 
-export const THEME_ORDER = ['sunset', 'neon', 'gold'];
-
-// The three export sizes, in pixels.
-export const EXPORT_SIZES = {
-  square: { label: '1080 x 1080', w: 1080, h: 1080 },
-  portrait: { label: '1080 x 1350', w: 1080, h: 1350 },
-  wide: { label: '1920 x 1080', w: 1920, h: 1080 },
-};
-
-export const EXPORT_ORDER = ['square', 'portrait', 'wide'];
-
-// The white frame between panels, as a fraction of the cover's short side.
-const GUTTER = 0.006;
-// The dark band the big caption sits on, as a fraction of the cover height.
-const BAND_H = 0.19;
-
-// The panel rectangles of a layout, in pixels, for a cover of width w and
-// height h. Every panel is inset by half a gutter so the white frame shows
-// evenly between neighbours and around the edge.
-export function panelRects(layout, w, h) {
-  const g = Math.max(2, Math.round(Math.min(w, h) * GUTTER));
-  return LAYOUTS[layout].panels.map((p) => ({
-    x: Math.round(p.x * w) + g / 2,
-    y: Math.round(p.y * h) + g / 2,
-    w: Math.round(p.w * w) - g,
-    h: Math.round(p.h * h) - g,
-  }));
+// Panel rectangles, in pixels, for a cover of W x H. The caption zone is
+// returned too, so the lettering always sits on the same poster band.
+export function layoutPanels(layout, W, H) {
+  const g = Math.max(4, Math.round(Math.min(W, H) * 0.014));
+  const third = (W - 2 * g) / 3;
+  const half = (W - g) / 2;
+  const halfH = (H - g) / 2;
+  if (layout === 'grid') {
+    return {
+      panels: [
+        { x: 0, y: 0, w: half, h: halfH },
+        { x: half + g, y: 0, w: half, h: halfH },
+        { x: 0, y: halfH + g, w: half, h: halfH },
+        { x: half + g, y: halfH + g, w: half, h: halfH },
+      ],
+      caption: { x: W * 0.04, y: H * 0.815, w: W * 0.92, h: H * 0.15 },
+    };
+  }
+  if (layout === 'full') {
+    const iw = Math.round(W * 0.30);
+    const ih = Math.round(H * 0.30);
+    return {
+      panels: [
+        { x: 0, y: 0, w: W, h: H },
+        { x: W - iw - g * 2, y: H - ih - g * 2, w: iw, h: ih, inset: true },
+      ],
+      caption: { x: W * 0.04, y: H * 0.80, w: W * 0.60, h: H * 0.16 },
+    };
+  }
+  // hero: one big panel on top, three vignettes in a row below it.
+  const heroH = Math.round(H * 0.60);
+  const rowY = heroH + g;
+  const rowH = H - rowY;
+  return {
+    panels: [
+      { x: 0, y: 0, w: W, h: heroH },
+      { x: 0, y: rowY, w: third, h: rowH },
+      { x: third + g, y: rowY, w: third, h: rowH },
+      { x: 2 * (third + g), y: rowY, w: third, h: rowH },
+    ],
+    caption: { x: W * 0.04, y: H * 0.845, w: W * 0.92, h: H * 0.125 },
+  };
 }
 
-// Draws one photo into one panel rectangle, cover-fit, zoomed and panned by
-// the panel's crop: zoom 1 fills the panel, larger zooms in, ox/oy shift the
-// photo in fractions of the panel (0 is centred, +-0.5 is an edge).
-export function drawPanelPhoto(ctx, rect, photo, crop) {
-  const { x, y, w, h } = rect;
+// Draw one photo into a panel rect with cover-fit, zoom and pan, then grade it.
+export function drawPanel(ctx, img, rect, photo, gradeName) {
+  const { w, h } = rect;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(x, y, w, h);
+  ctx.rect(rect.x, rect.y, w, h);
   ctx.clip();
-  if (!photo) {
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, '#3a2b4d');
-    g.addColorStop(1, '#1c1226');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
-    return;
+  if (img) {
+    const base = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const scale = base * (photo?.zoom ?? 1);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    // Faces sit in the upper half of a photo, so when a wide panel crops a
+    // tall photo top-to-bottom, bias the window toward the top of the image
+    // instead of cutting the subject's head off at the centre line.
+    const topBias = Math.max(0, dh - h) * 0.18;
+    const cx = rect.x + w / 2 + (photo?.ox ?? 0) * w * 0.38;
+    const cy = rect.y + h / 2 + topBias + (photo?.oy ?? 0) * h * 0.38;
+    ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+  } else {
+    // Empty panel: a dusk gradient so the poster still reads as finished.
+    const empty = ctx.createLinearGradient(rect.x, rect.y, rect.x + w, rect.y + h);
+    empty.addColorStop(0, '#3d1e5c');
+    empty.addColorStop(0.55, '#a32e6e');
+    empty.addColorStop(1, '#ff7a3d');
+    ctx.fillStyle = empty;
+    ctx.fillRect(rect.x, rect.y, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = `700 ${Math.round(Math.min(w, h) * 0.07)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ADD A PHOTO', rect.x + w / 2, rect.y + h / 2);
   }
-  const zoom = crop?.zoom ?? 1;
-  const ox = crop?.ox ?? 0;
-  const oy = crop?.oy ?? 0;
-  const base = Math.max(w / photo.naturalWidth, h / photo.naturalHeight) * zoom;
-  const pw = photo.naturalWidth * base;
-  const ph = photo.naturalHeight * base;
-  // Pan, but never so far that the photo stops covering the panel: clamp the
-  // offset to the range where an edge of the photo still meets the panel edge.
-  const dx = Math.max(x + w - pw, Math.min(x, x + (w - pw) / 2 + ox * w));
-  const dy = Math.max(y + h - ph, Math.min(y, y + (h - ph) / 2 + oy * h));
-  ctx.drawImage(photo, dx, dy, pw, ph);
+  applyGrade(ctx, rect, gradeName);
+  ctx.restore();
+  // Crisp poster frame around the panel.
+  const bw = Math.max(2, Math.round(Math.min(w, h) * 0.012));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.lineWidth = bw;
+  ctx.strokeRect(rect.x + bw / 2, rect.y + bw / 2, w - bw, h - bw);
   ctx.restore();
 }
 
-// The Vice City grade over one panel: a warm sky wash from the top, a hot
-// wash from the bottom, a deep violet shade for contrast, then a vignette
-// that darkens the corners so the panels read as poster art.
-export function gradePanel(ctx, rect, theme) {
+export function applyGrade(ctx, rect, gradeName) {
+  const def = GRADE_DEFS[gradeName] ?? GRADE_DEFS.sunset;
   const { x, y, w, h } = rect;
-  const t = THEMES[theme];
+  const wash = (stops, mode, alpha) => {
+    const grad = ctx.createLinearGradient(x, y, x + w * 0.35, y + h);
+    for (const [at, color] of stops) grad.addColorStop(at, color);
+    ctx.save();
+    ctx.globalCompositeOperation = mode;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+  };
+  wash(def.washA, 'overlay', 0.55);
+  wash(def.washB, 'soft-light', 0.6);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(x, y, w, h);
-  ctx.clip();
-  const sky = ctx.createLinearGradient(x, y, x, y + h * 0.7);
-  sky.addColorStop(0, t.sky);
-  sky.addColorStop(1, 'rgba(255, 122, 26, 0)');
-  ctx.fillStyle = sky;
+  ctx.globalCompositeOperation = 'color';
+  ctx.globalAlpha = def.tintAlpha;
+  ctx.fillStyle = def.tint;
   ctx.fillRect(x, y, w, h);
-  const sea = ctx.createLinearGradient(x, y + h * 0.3, x, y + h);
-  sea.addColorStop(0, 'rgba(214, 36, 120, 0)');
-  sea.addColorStop(1, t.sea);
-  ctx.fillStyle = sea;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = t.deep;
-  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+  // Vignette: darken the corners so the panel reads as a poster frame.
   const vig = ctx.createRadialGradient(
-    x + w / 2, y + h / 2, Math.min(w, h) * 0.32,
-    x + w / 2, y + h / 2, Math.max(w, h) * 0.72,
+    x + w / 2, y + h / 2, Math.min(w, h) * 0.35,
+    x + w / 2, y + h / 2, Math.max(w, h) * 0.75,
   );
-  vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vig.addColorStop(1, 'rgba(0, 0, 0, 0.38)');
+  vig.addColorStop(0, 'rgba(8,2,16,0)');
+  vig.addColorStop(1, 'rgba(8,2,16,0.38)');
+  ctx.save();
   ctx.fillStyle = vig;
   ctx.fillRect(x, y, w, h);
   ctx.restore();
 }
 
-// Bold condensed capitals: the font stack is system fonts only (no font file
-// is loaded), and the horizontal squeeze gives the tall poster-lettering look
-// on any machine. Returns the fitted size so the caller can place the line.
-export function drawCaptionLine(ctx, text, cx, baselineY, maxWidth, maxSize, theme, fill = true) {
-  const line = text.trim().toUpperCase();
-  if (!line) return 0;
-  const t = THEMES[theme];
-  let size = maxSize;
-  ctx.save();
-  ctx.textAlign = 'center';
+// Shrink-to-fit poster lettering with a dark outline, sunset fill and shadow.
+function drawCaptionText(ctx, text, zone, size, spacing, sub) {
+  const fontFor = (px) => `900 ${px}px "Arial Black", Impact, "Franklin Gothic Heavy", sans-serif`;
+  let px = Math.round(size);
   ctx.textBaseline = 'alphabetic';
-  ctx.lineJoin = 'round';
-  const measure = (s) => {
-    ctx.font = `900 ${s}px Impact, "Arial Narrow", "Franklin Gothic Medium", "Helvetica Neue", sans-serif`;
-    return ctx.measureText(line).width * 0.82;
+  const measure = (p) => {
+    ctx.font = fontFor(p);
+    try { ctx.letterSpacing = `${spacing}px`; } catch { /* older canvas */ }
+    return ctx.measureText(text).width;
   };
-  while (size > 10 && measure(size) > maxWidth) size -= 2;
-  ctx.font = `900 ${size}px Impact, "Arial Narrow", "Franklin Gothic Medium", "Helvetica Neue", sans-serif`;
-  ctx.translate(cx, baselineY);
-  ctx.scale(0.82, 1);
-  ctx.lineWidth = Math.max(2, size * 0.09);
-  ctx.strokeStyle = 'rgba(12, 4, 24, 0.92)';
-  ctx.strokeText(line, 0, 0);
-  if (fill) {
-    const grad = ctx.createLinearGradient(0, -size, 0, size * 0.18);
-    grad.addColorStop(0, t.title[0]);
-    grad.addColorStop(0.55, t.title[1]);
-    grad.addColorStop(1, t.title[2]);
-    ctx.fillStyle = grad;
-    ctx.fillText(line, 0, 0);
-  } else {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(line, 0, 0);
-  }
-  ctx.restore();
-  return size;
-}
-
-// Draws the whole cover: white frame, photos with their grade, the top line
-// small across the top, and the big title on a dark band along the foot.
-// `state` is { layout, theme, top, bottom, panels: [{ photo, zoom, ox, oy }] }.
-export function drawCoverArt(ctx, w, h, state) {
-  const theme = THEMES[state.theme] ? state.theme : 'sunset';
-  const t = THEMES[theme];
+  while (px > 12 && measure(px) > zone.w) px = Math.round(px * 0.94);
+  const baseline = zone.y + zone.h * 0.82;
   ctx.save();
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#f4f0e8';
-  ctx.fillRect(0, 0, w, h);
-  const rects = panelRects(state.layout, w, h);
-  rects.forEach((rect, i) => {
-    const panel = state.panels[i] ?? {};
-    drawPanelPhoto(ctx, rect, panel.photo ?? null, panel);
-    gradePanel(ctx, rect, theme);
-  });
-  // The dark band the title sits on, with a thin bright rule above it.
-  const bandY = h * (1 - BAND_H);
-  ctx.fillStyle = t.band;
-  ctx.fillRect(0, bandY, w, h - bandY);
-  ctx.fillStyle = t.title[1];
-  ctx.fillRect(0, bandY, w, Math.max(2, h * 0.006));
-  // Top line: small white capitals with wide tracking, over the top panels.
-  const top = (state.top ?? '').trim().toUpperCase();
-  if (top) {
-    const size = Math.round(Math.min(w, h) * 0.045);
+  ctx.font = fontFor(px);
+  try { ctx.letterSpacing = `${spacing}px`; } catch { /* older canvas */ }
+  ctx.textAlign = 'left';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = Math.round(px * 0.10);
+  ctx.shadowOffsetY = Math.round(px * 0.045);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, Math.round(px * 0.16));
+  ctx.strokeStyle = '#160412';
+  ctx.strokeText(text, zone.x, baseline);
+  const fill = ctx.createLinearGradient(zone.x, baseline - px, zone.x, baseline + px * 0.12);
+  fill.addColorStop(0, '#ffffff');
+  fill.addColorStop(0.55, '#ffe9c9');
+  fill.addColorStop(1, '#ffb35c');
+  ctx.fillStyle = fill;
+  ctx.fillText(text, zone.x, baseline);
+  ctx.restore();
+  if (sub) {
+    const subPx = Math.max(10, Math.round(px * 0.24));
     ctx.save();
-    ctx.font = `800 ${size}px "Arial Narrow", "Helvetica Neue", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.lineWidth = Math.max(2, size * 0.12);
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(12, 4, 24, 0.9)';
-    const y = size * 1.6;
-    ctx.strokeText(top.split('').join('\u2009'), w / 2, y);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(top.split('').join('\u2009'), w / 2, y);
+    ctx.font = `700 ${subPx}px system-ui, sans-serif`;
+    try { ctx.letterSpacing = `${Math.round(subPx * 0.35)}px`; } catch { /* older canvas */ }
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffe9c9';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = Math.round(subPx * 0.3);
+    ctx.fillText(sub.toUpperCase(), zone.x + 2, baseline + subPx * 1.5);
     ctx.restore();
   }
-  // Big title, fitted to the band.
-  const bottom = (state.bottom ?? '').trim();
-  if (bottom) {
-    drawCaptionLine(
-      ctx, bottom, w / 2, h - h * 0.045,
-      w * 0.94, h * BAND_H * 0.62, theme, true,
-    );
-  }
-  ctx.restore();
 }
 
-// Renders a cover onto a fresh offscreen canvas at the export size and
-// returns the canvas, so exports are drawn at full resolution, never a
-// screenshot upscale of the preview.
-export function renderExportCanvas(state, sizeKey) {
-  const size = EXPORT_SIZES[sizeKey] ?? EXPORT_SIZES.square;
+export function drawCaption(ctx, zone, caption, subcaption, W) {
+  const scrim = ctx.createLinearGradient(0, zone.y - zone.h * 0.5, 0, zone.y + zone.h);
+  scrim.addColorStop(0, 'rgba(10,2,18,0)');
+  scrim.addColorStop(1, 'rgba(10,2,18,0.72)');
+  ctx.save();
+  ctx.fillStyle = scrim;
+  ctx.fillRect(0, zone.y - zone.h * 0.5, W, zone.h * 1.5);
+  ctx.restore();
+  const text = (caption || 'VICE SUNSET').toUpperCase();
+  drawCaptionText(ctx, text, zone, zone.h * 0.78, Math.max(1, zone.h * 0.02), subcaption);
+}
+
+// The whole cover: panels, grade, caption, outer frame.
+export function renderCover(ctx, W, H, state) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#160a24';
+  ctx.fillRect(0, 0, W, H);
+  const { panels, caption } = layoutPanels(state.layout, W, H);
+  panels.forEach((rect, i) => {
+    const photoIndex = state.panelPhoto?.[i] ?? 0;
+    const photo = state.photos?.[photoIndex];
+    drawPanel(ctx, photo?.img ?? null, rect, photo, state.grade);
+  });
+  drawCaption(ctx, caption, state.caption, state.subcaption, W);
+  const edge = Math.max(3, Math.round(Math.min(W, H) * 0.008));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(10,2,18,0.9)';
+  ctx.lineWidth = edge;
+  ctx.strokeRect(edge / 2, edge / 2, W - edge, H - edge);
+  ctx.restore();
+  return { panels, caption };
+}
+
+export function sizeParts(size) {
+  const [w, h] = size.split('x').map(Number);
+  return { w, h };
+}
+
+// Render an export-size cover offscreen and hand back a PNG blob.
+export function exportCoverPng(state) {
+  const { w, h } = sizeParts(state.size);
   const canvas = document.createElement('canvas');
-  canvas.width = size.w;
-  canvas.height = size.h;
-  drawCoverArt(canvas.getContext('2d'), size.w, size.h, state);
-  return canvas;
+  canvas.width = w;
+  canvas.height = h;
+  renderCover(canvas.getContext('2d'), w, h, state);
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+export function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }

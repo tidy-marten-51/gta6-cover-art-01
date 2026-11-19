@@ -1,38 +1,64 @@
-// Fixed scenes for screenshots: ?shot=cover shows the exported cover alone,
-// ?shot=editor shows the editor with a photo loaded. The query picks the
-// layout, theme, sample photos and caption, so every screenshot is the app's
-// own drawing of a cover at the size the shot asks for. window.__shotReady
-// is set once the scene is painted.
-import { LAYOUTS, THEMES } from './cover.js';
+// Screenshot mode for Vice Lights: ?shot=cover draws one exported cover full
+// screen; ?shot=editor shows the editor with a sample photo loaded. Both set
+// window.__shotReady once the frame is drawn, which the shot script waits on.
+import { renderCover, sizeParts } from './cover.js';
 
-// Loads a sample photo by name (samples/<name>.jpg).
-export function loadSample(name) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`sample ${name} failed to load`));
-    img.src = `samples/${name}.jpg`;
-  });
+const params = new URLSearchParams(window.location.search);
+
+function pick(name, fallback) {
+  const value = params.get(name);
+  return value === null || value === '' ? fallback : value;
 }
 
-// Applies a shot scene to the editor state and paints it. `apply` is the
-// editor's own function: it takes the new state and redraws the preview.
-export async function runShot(shot, query, apply) {
-  if (shot === 'cover') document.body.classList.add('shot-cover');
-  const layout = LAYOUTS[query.get('layout')] ? query.get('layout') : 'hero';
-  const theme = THEMES[query.get('theme')] ? query.get('theme') : 'sunset';
-  const photos = (query.get('photos') ?? query.get('photo') ?? 'pier').split(',');
-  const top = query.get('top') ?? 'VICE CITY';
-  const bottom = query.get('caption') ?? 'Sunset Heist';
-  const count = LAYOUTS[layout].panels.length;
-  const oy = Number(query.get('oy') ?? 0);
-  const panels = [];
-  for (let i = 0; i < count; i += 1) {
-    const name = photos[i % photos.length];
-    // `oy` pans every panel's photo down a little, so a wide panel keeps the
-    // subject's face in frame instead of cropping it at the top edge.
-    panels.push({ photo: await loadSample(name), zoom: 1, ox: 0, oy });
+export async function runShotMode({ state, render, loadSampleIntoState }) {
+  const mode = pick('shot', 'editor');
+  const photoName = pick('photo', 'pier');
+  const layout = pick('layout', 'hero');
+  const grade = pick('grade', 'sunset');
+  const caption = pick('caption', 'Sunset Heist');
+  const subcaption = pick('subcaption', 'Neon Coast');
+  const size = pick('size', '1080x1080');
+
+  if (['hero', 'grid', 'full'].includes(layout)) state.layout = layout;
+  if (['sunset', 'neon', 'gold'].includes(grade)) state.grade = grade;
+  state.caption = caption;
+  state.subcaption = subcaption;
+  if (['1080x1080', '1080x1350', '1920x1080'].includes(size)) state.size = size;
+
+  // Load the sample photo first so every shot has a real photo in the panels.
+  try {
+    await loadSampleIntoState(photoName);
+  } catch (err) {
+    console.warn('sample photo failed:', err.message);
   }
-  apply({ layout, theme, top, bottom, panels });
-  requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
+  // A second sample in the hero's vignette row shows the multi-photo fill.
+  if (mode === 'cover' && state.photos.length === 1 && photoName === 'pier') {
+    try {
+      await loadSampleIntoState('boulevard');
+      state.panelPhoto = [0, 1, 0, 1];
+    } catch { /* one photo is enough */ }
+  }
+
+  // Keep the caption fields in sync with the shot's caption.
+  const captionInput = document.getElementById('caption');
+  const subInput = document.getElementById('subcaption');
+  if (captionInput) captionInput.value = state.caption;
+  if (subInput) subInput.value = state.subcaption;
+  document.querySelectorAll('#layoutRow .opt').forEach((b) => b.classList.toggle('active', b.dataset.layout === state.layout));
+  document.querySelectorAll('#gradeRow .opt').forEach((b) => b.classList.toggle('active', b.dataset.grade === state.grade));
+  document.querySelectorAll('#sizeRow .opt').forEach((b) => b.classList.toggle('active', b.dataset.size === state.size));
+
+  if (mode === 'cover') {
+    document.body.classList.add('shot-cover');
+    const { w, h } = sizeParts(state.size);
+    const canvas = document.getElementById('shotCanvas');
+    canvas.width = w;
+    canvas.height = h;
+    renderCover(canvas.getContext('2d'), w, h, state);
+  } else {
+    render();
+  }
+
+  await document.fonts.ready;
+  window.__shotReady = true;
 }
