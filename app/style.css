@@ -1,12 +1,44 @@
-html, body { margin: 0; height: 100%; background: #f2f0f4; color: #1d1b22; font: 15px/1.4 system-ui, sans-serif; }
-.app { display: flex; gap: 32px; align-items: center; justify-content: center; height: 100%; padding: 24px; box-sizing: border-box; }
-.controls { display: flex; flex-direction: column; gap: 14px; width: 280px; }
-.controls h1 { margin: 0; font-size: 28px; }
-.controls p { margin: 0; color: #5c5866; }
+/* Neon Coast — a dark editor around a bright cover. System fonts only, no
+   network requests, nothing here loads from outside app/. */
+html, body { margin: 0; height: 100%; background: #120a1e; color: #f2ecf7; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.app { display: flex; gap: 28px; height: 100%; padding: 22px; box-sizing: border-box; }
+.controls { display: flex; flex-direction: column; gap: 12px; width: 320px; min-width: 280px; overflow-y: auto; }
+.controls header h1 { margin: 0; font-size: 30px; letter-spacing: 0.04em; text-transform: uppercase; background: linear-gradient(90deg, #ffe259, #ff7b2f 55%, #ff2e88); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tagline { margin: 2px 0 0; color: #b9a8c9; font-size: 13px; }
+.steps { display: flex; gap: 6px; }
+.steps button { flex: 1; font: inherit; font-weight: 700; padding: 8px 4px; border: 1px solid #3d2b52; border-radius: 8px; background: #1d1229; color: #cbb8dd; cursor: pointer; }
+.steps button.active { background: linear-gradient(90deg, #ff7b2f, #ff2e88); border-color: transparent; color: #fff; }
+.step { display: none; flex-direction: column; gap: 10px; }
+.step.active { display: flex; }
+.step h2 { margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #d9a7ff; }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker button { font: inherit; font-weight: 600; padding: 8px 10px; border: 1px solid #3d2b52; border-radius: 8px; background: #1d1229; color: #e9ddf5; cursor: pointer; }
+.picker button:hover { border-color: #ff7b2f; }
+.picker button.swatch.sunset { border-bottom: 3px solid #ff7b2f; }
+.picker button.swatch.neon { border-bottom: 3px solid #00c2ff; }
+.picker button.swatch.gold { border-bottom: 3px solid #ffc233; }
 label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
-input[type=text] { font: inherit; padding: 8px; border: 1px solid #c9c4d1; border-radius: 6px; }
-button { font: inherit; font-weight: 700; padding: 10px; border: 0; border-radius: 6px; background: #1d1b22; color: #fff; cursor: pointer; }
-canvas { width: min(70vh, 60vw); height: min(70vh, 60vw); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); }
+input[type=text] { font: inherit; padding: 9px 10px; border: 1px solid #3d2b52; border-radius: 8px; background: #1d1229; color: #fff; }
+input[type=text]:focus { outline: 2px solid #ff7b2f; outline-offset: 1px; }
+#panels { display: flex; flex-direction: column; gap: 8px; }
+.panel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border: 1px solid #3d2b52; border-radius: 8px; background: #1a1026; cursor: pointer; }
+.panel.selected { border-color: #ff7b2f; box-shadow: 0 0 0 1px #ff7b2f; }
+.panel-name { font-weight: 700; width: 100%; }
+button.mini, label.mini.upload { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 9px; border: 1px solid #4a3560; border-radius: 6px; background: #241736; color: #e9ddf5; cursor: pointer; }
+button.mini:hover, label.mini.upload:hover { border-color: #ff7b2f; }
+label.mini.upload input { display: none; }
+.zoom-row { flex-direction: row; align-items: center; gap: 10px; }
+.zoom-row input[type=range] { flex: 1; accent-color: #ff7b2f; }
+#zoom-value { min-width: 44px; text-align: right; color: #d9a7ff; }
+.hint { margin: 0; font-size: 13px; color: #b9a8c9; }
+button.primary { font: inherit; font-weight: 800; padding: 12px; border: 0; border-radius: 8px; background: linear-gradient(90deg, #ff7b2f, #ff2e88); color: #fff; cursor: pointer; }
+#export-all { font: inherit; font-weight: 700; padding: 10px; border: 1px solid #3d2b52; border-radius: 8px; background: #1d1229; color: #e9ddf5; cursor: pointer; }
+#status { margin: 0; min-height: 1.2em; color: #8fe3b0; font-size: 13px; }
+.preview { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; }
+#cover { max-width: 100%; max-height: 100%; box-shadow: 0 12px 44px rgba(0, 0, 0, 0.55); cursor: grab; touch-action: none; }
+#cover:active { cursor: grabbing; }
+/* Screenshot scenes: hide the editor and show the cover full-frame. */
 body.shot-cover .controls { display: none; }
-body.shot-cover .app { padding: 0; }
-body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; }
+body.shot-cover .app { padding: 0; gap: 0; }
+body.shot-cover .preview { display: contents; }
+body.shot-cover #cover { max-width: none; max-height: none; width: 100vw; height: 100vh; box-shadow: none; }

@@ -3,20 +3,61 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cover Snap</title>
+<title>Neon Coast — GTA-style cover maker</title>
+<meta name="description" content="Turn your photos and a caption into GTA-style multi-panel cover art, offline in your browser, and export it as a PNG.">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
-  <section class="controls">
-    <h1>Cover Snap</h1>
-    <p>A photo and a caption, made into a square cover.</p>
-    <label>Photo <input id="photo" type="file" accept="image/*"></label>
-    <label>Caption <input id="caption" type="text" maxlength="40" value="Sunset Heist"></label>
-    <button id="export" type="button">Export PNG 1080 x 1080</button>
-    <p id="status" role="status"></p>
+  <section class="controls" aria-label="Cover editor">
+    <header>
+      <h1>Neon Coast</h1>
+      <p class="tagline">Your photos, a caption, a Vice City cover — made offline, on your machine.</p>
+    </header>
+    <nav class="steps" aria-label="Steps">
+      <button type="button" data-step="1" class="active">1 · Photos</button>
+      <button type="button" data-step="2">2 · Caption</button>
+      <button type="button" data-step="3">3 · Export</button>
+    </nav>
+
+    <div class="step active" id="step-1">
+      <h2>Layout</h2>
+      <div class="picker" id="layouts"></div>
+      <h2>Photos — click a panel, then drag it to crop</h2>
+      <div id="panels"></div>
+      <label class="zoom-row">Zoom selected panel
+        <input id="zoom" type="range" min="1" max="3" step="0.05" value="1">
+        <span id="zoom-value">100%</span>
+      </label>
+      <p class="hint">Tip: drag the photo inside the preview to reposition it. The two samples are free to use; upload your own photos instead.</p>
+    </div>
+
+    <div class="step" id="step-2">
+      <h2>Caption</h2>
+      <label>Top line
+        <input id="top" type="text" maxlength="30" value="VICE CITY">
+      </label>
+      <label>Big title
+        <input id="bottom" type="text" maxlength="24" value="Sunset Heist">
+      </label>
+      <h2>Grade</h2>
+      <div class="picker" id="themes"></div>
+      <p class="hint">The grade washes every panel in a sunset or neon glow and tints the title to match.</p>
+    </div>
+
+    <div class="step" id="step-3">
+      <h2>Export size</h2>
+      <div class="picker" id="sizes"></div>
+      <button id="export" type="button" class="primary">Export PNG</button>
+      <button id="export-all" type="button">Export all three sizes</button>
+      <p id="status" role="status"></p>
+      <p class="hint">Exports are drawn at full size, never an upscale of the preview. No photo ever leaves your machine.</p>
+    </div>
   </section>
-  <canvas id="cover" width="1080" height="1080" aria-label="The cover"></canvas>
+  <section class="preview" aria-label="Cover preview">
+    <canvas id="cover" width="720" height="720" aria-label="The cover"></canvas>
+  </section>
 </main>
 <script type="module" src="./src/main.js"></script>
 </body>
