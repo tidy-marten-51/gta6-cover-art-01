@@ -1,6 +1,6 @@
-// A tiny static server for app/ (Node 22, standard library only), so an entry
-// can be tried locally without a build step: `node serve.ts` serves app/ on
-// http://localhost:8080. It sends the MIME types an offline web app needs,
+// A tiny static server for app/ (Node 22, standard library only), so the
+// entry can be tried locally without a build step: `node serve.ts` serves
+// app/ on http://localhost:8080. It sends the MIME types an offline web app
 // refuses any path outside app/, and otherwise does nothing clever: this is a
 // development convenience, not a web server for the internet.
 import { createReadStream, statSync } from 'node:fs';

@@ -42,7 +42,9 @@ function panelCount() {
 }
 
 // Sizes the preview canvas to the chosen export aspect (at most 720 px on
-// its long side) and repaints the cover into it.
+// its long side) and repaints the cover into it. The zoom readout always
+// reflects the selected panel, so the slider never shows a stale value
+// after the layout or the selection changes.
 function redraw() {
   const size = EXPORT_SIZES[state.size];
   const scale = Math.min(720 / size.w, 720 / size.h);

@@ -1,6 +1,6 @@
 // Fixed scenes for screenshots: ?shot=cover shows the exported cover alone,
 // ?shot=editor shows the editor with a photo loaded. The query picks the
-// layout, theme, sample photos and caption, so each screenshot is the app's
+// layout, theme, sample photos and caption, so every screenshot is the app's
 // own drawing of a cover at the size the shot asks for. window.__shotReady
 // is set once the scene is painted.
 import { LAYOUTS, THEMES } from './cover.js';

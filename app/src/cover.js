@@ -3,7 +3,7 @@
 // lettering. One function, drawCoverArt, paints a whole cover onto any 2D canvas
 // at any size from the same plain state object, so the live preview and the
 // exported PNG are the same drawing, and the same inputs always give the same
-// pixels (no clock, no random numbers, no network).
+// pixels — no clock, no random numbers, no network, no hidden state.
 
 // A panel is one rectangle of the cover: { x, y, w, h } in fractions of the
 // cover, plus the photo that fills it and how it is cropped inside it.

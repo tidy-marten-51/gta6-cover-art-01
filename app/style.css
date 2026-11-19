@@ -1,5 +1,6 @@
 /* Neon Coast — a dark editor around a bright cover. System fonts only, no
-   network requests, nothing here loads from outside app/. */
+   network requests, nothing here loads from outside app/. Colours are the
+   sunset grade: orange, pink and deep violet. */
 html, body { margin: 0; height: 100%; background: #120a1e; color: #f2ecf7; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .app { display: flex; gap: 28px; height: 100%; padding: 22px; box-sizing: border-box; }
 .controls { display: flex; flex-direction: column; gap: 12px; width: 320px; min-width: 280px; overflow-y: auto; }
